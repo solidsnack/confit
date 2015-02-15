@@ -14,11 +14,10 @@ import textwrap
 import types
 import uu
 
-from .task import *     # Import Task() and friends, to ease defining new tasks
-from .bash import *                                          # Pull in wrappers
+from . import *
 
 
-# # # # # # # # # # # # # # # # Config Collection # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # Config Collection # # # # # # # # # # # # # # #
 # # # # # # # # # library of generally useful tasks and helpers # # # # # # # #
 
 
@@ -49,7 +48,7 @@ class WriteFile(Task):
 
     def create(self):
         """Bash fragment implementing file creation.
-        
+
         If no content is passed, we use ``touch`` to create the file.
 
         If content is passed, then the file is created with ``cat`` if the
@@ -113,7 +112,7 @@ class EnDK(Task):
 
 
 # ################################################################# # # # # # #
-# ################################################################ Quirky tasks
+# ##################################### Tasks that display a decided preference
 
 
 class Sudoers(WriteFile):
@@ -132,7 +131,95 @@ class Sudoers(WriteFile):
         pass
 
 
+# ############################################################# # # # # # # # #
+# ############################################################# Useful wrappers
+
+
+class Sudo(Wrapper):
+    """Run the wrapped tasks with Sudo."""
+
+    def __init__(self, user=None):
+        self.__dict__.update(locals())
+        del self.self
+
+    @property
+    def body(self):
+        return ["""
+        {{ declare -f {inner} {names}
+          echo set -o errexit -o nounset -o pipefail
+          echo {inner}
+        }} | {sudo}
+        """.format(names=' '.join(other.name for other in self.others),
+                   inner=self.inner,
+                   sudo=self.sudo)]
+
+    @property
+    def sudo(self):
+        if self.user is not None:
+            return 'sudo -u %s bash' % pipes.quote(user)
+        else:
+            return 'sudo bash'
+
+
+class PopSudo(Sudo):
+    """Pop one layer of Sudo nesting (if present)."""
+    def __init__(self):
+        pass
+
+    @property
+    def sudo(self):
+        return """
+        if [[ ${SUDO_USER:+isset} ]]
+        then sudo -u "${SUDO_USER}" bash
+        else bash
+        fi
+        """
+
+
+class CD(Wrapper):
+    """Change directory and then run code.
+
+    By default, shell expansion is allowed, to facilitate things like ``cd ~``
+    or ``cd $HADOOP_HOME``.
+    """
+    def __init__(self, directory, allow_shell_expansion=True):
+        self.__dict__.update(locals())
+        del self.self
+
+    @property
+    def body(self):
+        if self.allow_shell_expansion:
+            directory = self.directory
+        else:
+            directory = pipes.quote(self.directory)
+        return ["""
+        ( set -o errexit -o nounset -o pipefail
+          cd {directory}
+          {inner}
+        )
+        """.format(directory=directory, inner=self.inner)]
+
+
+class Env(Wrapper):
+    """Set environment variables when tasks are run."""
+    def __init__(self, **env):
+        self.__dict__.update(locals())
+        del self.self
+
+    @property
+    def body(self):
+        decls = ['export %s=%s' % (pipes.quote(var), pipes.quote(val))
+                 for var, val in sorted(self.env.items())]
+        return ["""
+        ( set -o errexit -o nounset -o pipefail
+          {decls}
+          {inner}
+        )
+        """.format(decls='\n  '.join(decls), inner=self.inner)]
+
+
 # ########################################################### # # # # # # # # #
 # ########################################################## Export non-modules
 
-__all__ = [name for name, d in locals().items() if type(d) != types.ModuleType]
+__all__ = [name for name, decl in locals().items()
+           if not isinstance(decl, types.ModuleType)]

@@ -1,6 +1,6 @@
 .PHONY: pep8
 pep8:
-	pep8 masterclass | tee pep8.txt | head -n8
+	pep8 confit | tee pep8.txt | head -n8
 
 .PHONY: install
 install:
