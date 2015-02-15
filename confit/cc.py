@@ -1,11 +1,33 @@
+"""
+A collection of generally useful configurations, as well as confit's core
+definitions. If you're writing a system, configuration you probably want this
+module.
+"""
+
 import binascii
 import os
 import pipes
+import re
 import StringIO
+import sys
 import textwrap
+import types
 import uu
 
-from .task import Task
+from .task import *     # Import Task() and friends, to ease defining new tasks
+from .bash import *                                          # Pull in wrappers
+
+
+# # # # # # # # # # # # # # # # Config Collection # # # # # # # # # # # # # # # 
+# # # # # # # # # library of generally useful tasks and helpers # # # # # # # #
+
+
+def untq(string):
+    """Reformat and outdent a triple quoted string
+
+    Removes an initial newline, if present.
+    """
+    return Bash.untq(string)
 
 
 # ##################################################### # # # # # # # # # # # #
@@ -13,6 +35,7 @@ from .task import Task
 
 
 class WriteFile(Task):
+    """Write a file to the given location on disk."""
     def __init__(self, path, content=None, mode=None, owner=None):
         self.__dict__.update(locals())
         del self.self
@@ -25,6 +48,14 @@ class WriteFile(Task):
         ]
 
     def create(self):
+        """Bash fragment implementing file creation.
+        
+        If no content is passed, we use ``touch`` to create the file.
+
+        If content is passed, then the file is created with ``cat`` if the
+        contents are plain text or ``uudecode`` if the contents are binary
+        (which for us means: the contents contain ASCII null or ASCII tab).
+        """
         if self.content is None:
             return ['touch', self.path]
         else:
@@ -37,13 +68,14 @@ class WriteFile(Task):
             else:
                 i, o = StringIO.StringIO(self.content), StringIO.StringIO()
                 uu.encode(i, o, '/dev/stdout')
-                template = 'uudecode > {path} <<-\\uu\n{content}\nuu'
+                template = 'uudecode > {path} \\\n<<-\\uu\n{content}\nuu'
                 text = template.format(path=pipes.quote(self.path),
                                        content=o.getvalue())
             return '\n\t'.join(text.split('\n'))
 
 
 class TZ(Task):
+    """Set system timezone."""
     def __init__(self, tz='UTC'):
         self.__dict__.update(locals())
         del self.self
@@ -58,6 +90,7 @@ class TZ(Task):
 
 
 class Apt(Task):
+    """Install a package with Apt."""
     def __init__(self, package):
         self.__dict__.update(locals())
         del self.self
@@ -67,6 +100,7 @@ class Apt(Task):
 
 
 class EnDK(Task):
+    """Create and enable the en_DK.UTF-8 locale."""
     def code(self):
         return """
         local vars=(LANG=en_DK.UTF-8
@@ -83,15 +117,22 @@ class EnDK(Task):
 
 
 class Sudoers(WriteFile):
+    """Simplify Sudo permissions."""
     path = '/etc/sudoers.d/an-it-harm-none-do-what-ye-will'
     mode = '0440'
     owner = 'root:root'
-    content = textwrap.dedent("""
+    content = untq("""
         Defaults !authenticate, !lecture, !mail_badpass, !env_reset
 
         root    ALL=(ALL) ALL
         %sudo   ALL=(ALL) ALL
-    """[1:])
+    """)
 
     def __init__(self):
         pass
+
+
+# ########################################################### # # # # # # # # #
+# ########################################################## Export non-modules
+
+__all__ = [name for name, d in locals().items() if type(d) != types.ModuleType]

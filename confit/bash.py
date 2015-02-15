@@ -19,10 +19,19 @@ class Bash(Specced):
         if isinstance(chunk, basestring):
             # Block of Bash code, maybe with tab-prefixed Bash HEREDOCs,
             # maybe in a Python triple-quoted string.
-            dedented = textwrap.dedent(re.sub(r'^\n ', ' ', chunk)).strip()
+            dedented = Bash.untq(chunk)
             return re.sub(r'^([^\t])', r'  \1', dedented, flags=re.MULTILINE)
         # Array of arguments, which should be properly escaped.
         return '  ' + ' '.join(pipes.quote(s) for s in arg)
+
+    @staticmethod
+    def untq(string):
+        """Outdent triple-quoted strings.
+
+        A leading newline, if present, is stripped.
+        """
+        string = string[1:] if string[0:1] == '\n' else string
+        return textwrap.dedent(string).strip()
 
     def __init__(self, code, *args):
         """Construct a callable Bash code object.
