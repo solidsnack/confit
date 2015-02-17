@@ -105,7 +105,7 @@ class Bash(Specced):
         # TODO: Reimplement by spawning a Bash shell and passing self over.
         #       This way, we needn't write a file to disk.
         with tempfile.NamedTemporaryFile(suffix='.bash') as h:
-            h.write(self.to_script(*args, **kwargs))
+            h.write(self.script(*args, **kwargs))
             h.flush()
             os.chmod(h.name, stat.S_IRUSR | stat.S_IXUSR)
             os.system(h.name)
