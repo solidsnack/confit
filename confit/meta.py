@@ -16,6 +16,17 @@ class Named(object):
         module = module + '.' if module not in [None, '__main__'] else ''
         return module + typ.__name__
 
+    @staticmethod
+    def components(name):
+        name = name.name if isinstance(name, Named) else name
+        def subkey(s):
+            return tuple(s.split('//')) if '//' in s else s
+        return tuple(subkey(s) for s in name.split('.'))
+
+    @property
+    def sortkey(self):
+        return Named.components(self.name)
+
 
 class Specced(Named):
     def __new__(typ, *args, **kwargs):

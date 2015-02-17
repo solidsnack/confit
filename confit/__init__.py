@@ -63,6 +63,15 @@ class Bash(Specced):
         return ['\n'.join(['function %s {' % self.name, body, '}'])]
 
     @property
+    def names(self):
+        """Names of function definition (or definitions).
+
+        This might include any number of names of other functions, if this
+        Bash object calls them.
+        """
+        return set([self.name])
+
+    @property
     def call(self):
         if hasattr(self, 'args'):
             args = [pipes.quote(arg) for arg in self.args]
@@ -145,9 +154,11 @@ class Wrapper(Bash):
             if isinstance(other, Bash):
                 chained += [other]
             else:
-                chained += other
+                chained += list(other)
 
         for other in chained:
+            self._callspec_labels |= set([other._callspec])
+            self._callspec_labels |= other._callspec_labels
             other._callspec_labels |= set(self._callspec)
 
         self.others = chained
@@ -158,6 +169,13 @@ class Wrapper(Bash):
         calls = ['  ' + other.call for other in self.others]
         inner = '\n'.join(['function %s {' % self.inner] + calls + ['}'])
         return super(Wrapper, self).decls + [inner]
+
+    @property
+    def names(self):
+        names = set([self.name, self.inner])
+        for other in self.others:
+            names |= other.names
+        return names
 
     @property
     def inner(self):
@@ -202,6 +220,27 @@ class Task(ButOnce):
             return super(Task, self).decls
 
     @property
+    def names(self):
+        """Names of this task's functions and those of all dependencies."""
+        names = [self.name, self.pre] if len(self.deps()) > 0 else [self.name]
+        names = set(names)
+        for other in self.subs:
+            names |= other.names
+        return names
+
+    @property
+    def subs(self):
+        """All tasks in the dependency graph (full subtree)."""
+        def all_defs(task):
+            subs = []
+            if isinstance(task, Wrapper):
+                subs += task.others
+            if isinstance(task, Task):
+                subs += task.deps()
+            return itertools.chain(subs, *[all_defs(t) for t in subs])
+        return set(all_defs(self))
+
+    @property
     def pre(self):
         """Name of function which calls all dependencies."""
         return '%s//pre' % self.name
@@ -223,12 +262,8 @@ class Task(ButOnce):
                 subs += task.deps()
             return itertools.chain(subs, *[all_defs(t) for t in subs])
 
-        def split(task):
-            return re.split(r'[.]|//', task.name)
-
-        tasks = set(all_defs(self))
-        tasks |= set([self])
-        decls = [t.decls for t in sorted(tasks, key=split)]
+        tasks = set([self]) | self.subs
+        decls = [t.decls for t in sorted(tasks, key=Named.components)]
         return textwrap.dedent("""
             #!/bin/bash
             set -o errexit -o nounset -o pipefail

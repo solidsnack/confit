@@ -5,6 +5,7 @@ module.
 """
 
 import binascii
+import itertools
 import os
 import pipes
 import re
@@ -35,16 +36,23 @@ def untq(string):
 
 class WriteFile(Task):
     """Write a file to the given location on disk."""
-    def __init__(self, path, content=None, mode=None, owner=None):
+    def __init__(self, path, content=None, mode=None, owner=None, mkdir=True):
         self.__dict__.update(locals())
         del self.self
 
     def code(self):
         return [
+            self.mkdir_p(),
             self.create(),
-            ["chmod", self.mode, self.path] if self.mode else None,
-            ["chown", self.owner, self.path] if self.owner else None
+            ['chmod', self.mode, self.path] if self.mode else None,
+            ['chown', self.owner, self.path] if self.owner else None
         ]
+
+    def mkdir_p(self):
+        if self.mkdir:
+            dirname = os.path.dirname(self.path)
+            if dirname not in ['.', '..']:
+                return ['mkdir', '-p', dirname]
 
     def create(self):
         """Bash fragment implementing file creation.
@@ -120,6 +128,7 @@ class Sudoers(WriteFile):
     path = '/etc/sudoers.d/an-it-harm-none-do-what-ye-will'
     mode = '0440'
     owner = 'root:root'
+    mkdir = False
     content = untq("""
         Defaults !authenticate, !lecture, !mail_badpass, !env_reset
 
@@ -144,12 +153,13 @@ class Sudo(Wrapper):
 
     @property
     def body(self):
+        names = sorted(self.names, key=Named.components)
         return ["""
         {{ declare -f {inner} {names}
           echo set -o errexit -o nounset -o pipefail
           echo {inner}
         }} | {sudo}
-        """.format(names=' '.join(other.name for other in self.others),
+        """.format(names=' '.join(names),
                    inner=self.inner,
                    sudo=self.sudo)]
 
