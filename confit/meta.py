@@ -28,6 +28,13 @@ class Named(object):
         return Named.components(self.name)
 
 
+class ClassHierarchyRoot(object):
+    @classmethod
+    def subclasses(cls):
+        subs = cls.__subclasses__()
+        return set(subs) | {c for s in subs for c in s.subclasses()}
+
+
 class Specced(Named):
     def __new__(typ, *args, **kwargs):
         spec = CallSpec(typ.__init__, *args, **kwargs)

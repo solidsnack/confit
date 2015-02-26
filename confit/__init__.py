@@ -187,7 +187,7 @@ class Wrapper(Bash):
         return [self.inner]
 
 
-class Task(ButOnce):
+class Task(ButOnce, ClassHierarchyRoot):
     """A task is an idempotent chunk of Bash code.
 
     Tasks can depend on other tasks, or on tasks within wrappers.
