@@ -127,7 +127,6 @@ class Sudoers(WriteFile):
     """Simplify Sudo permissions."""
     path = '/etc/sudoers.d/an-it-harm-none-do-what-ye-will'
     mode = '0440'
-    owner = 'root:root'
     mkdir = False
     content = untq("""
         Defaults !authenticate, !lecture, !mail_badpass, !env_reset
