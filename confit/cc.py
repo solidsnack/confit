@@ -35,6 +35,9 @@ def untq(string):
 
 
 class WriteFile(Task):
+    mode = None
+    owner = None
+
     """Write a file to the given location on disk."""
     def __init__(self, path, content=None, mode=None, owner=None, mkdir=True):
         self.__dict__.update(locals())
